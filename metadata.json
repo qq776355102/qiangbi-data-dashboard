@@ -1,0 +1,5 @@
+{
+  "name": "Polygon Portfolio Visualizer",
+  "description": "A comprehensive dashboard for tracking Polygon network project metrics including Mint staking, Bonds, Spider Web rewards, and Turbine balances with Multicall3 support.",
+  "requestFramePermissions": []
+}
