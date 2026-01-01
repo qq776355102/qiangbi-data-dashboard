@@ -1,6 +1,7 @@
 
-export const DEFAULT_RPC = "https://polygon-bor-rpc.publicnode.com";
+import { TokenConfig } from './types.ts';
 
+export const DEFAULT_RPC = "https://polygon-bor-rpc.publicnode.com";
 export const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11";
 
 export const MINT_STAKE_CONTRACTS = [
@@ -30,8 +31,6 @@ export const TOKEN_SLGNS: TokenConfig = {
     symbol: "slgns",
     decimals: 9
 };
-
-import { TokenConfig } from './types';
 
 export const ERC20_ABI = [
     "function balanceOf(address owner) view returns (uint256)",
