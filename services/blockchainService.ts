@@ -43,39 +43,66 @@ export class BlockchainService {
         }
     }
 
+    /**
+     * 完全遵循用户提供的 queryUserTotalStaking 脚本逻辑
+     */
     private async queryTotalStaking(address: string): Promise<bigint> {
         try {
-            const cleanAddr = address.toLowerCase().replace('0x', '');
-            if (cleanAddr.length !== 40) return 0n;
-
-            // 修正后的地址填充逻辑 (32字节对齐，地址在后20字节)
-            const paddedAddr = "000000000000000000000000" + cleanAddr;
+            const userAddress_outwith0x = address.slice(2).toLowerCase();
             
-            // 构造专用的查询 Payload
-            const prefix = "ffd7d741000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000099a57e6c8558bc6689f894e068733adf83c19725000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000247965d56d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-            const middle = paddedAddr; // 使用标准对齐
-            const suffix = "00000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000247965d56d0000000000000000000000000000000000000000000000000000000000000000";
-            
-            const callData = "0x" + prefix + middle + suffix;
+            // 1:1 复制用户提供的 callData 模板
+            const callData = `0xffd7d741000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000099a57e6c8558bc6689f894e068733adf83c19725000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000247965d56d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000309ca717d6989676194b88fd06029a88ceefee6000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000645ac983f400000000000000000000000099a57e6c8558bc6689f894e068733adf83c197250000000000000000000000001964ca90474b11ffd08af387b110ba6c96251bfc000000000000000000000000${userAddress_outwith0x}00000000000000000000000000000000000000000000000000000000`;
 
             const result = await this.provider.call({
                 to: TOTAL_STAKING_QUERY_CONTRACT,
                 data: callData
-            }).catch(() => '0x');
+            }).catch(async () => {
+                return await this.provider.send('eth_call', [{
+                    to: TOTAL_STAKING_QUERY_CONTRACT,
+                    data: callData
+                }, 'latest']);
+            });
 
             if (result && result !== '0x') {
-                const hexStr = result.replace('0x', '');
-                // 搜索结果中可能的 BigInt 值 (质押值通常在这个范围内)
-                for (let i = 0; i <= hexStr.length - 64; i += 64) {
-                    try {
-                        const chunk = '0x' + hexStr.substring(i, i + 64);
-                        const val = BigInt(chunk);
-                        if (val > 100000000n && val < 1000000000000000000000000n) return val;
-                    } catch { continue; }
-                }
+                return this.parseTotalStakingFromRawData(result);
             }
             return 0n;
-        } catch { return 0n; }
+        } catch (error) {
+            console.error("queryTotalStaking failed:", error);
+            return 0n;
+        }
+    }
+
+    private parseTotalStakingFromRawData(rawData: string): bigint {
+        try {
+            if (!rawData || rawData === '0x' || rawData.length < 10) return 0n;
+            const multicallInterface = new ethers.Interface(TOTAL_STAKE_MULTICALL_ABI);
+            try {
+                const decoded = multicallInterface.decodeFunctionResult('multiCall', rawData);
+                const successes = decoded[0]; 
+                const results = decoded[1];
+                
+                // 索引 1 返回的是总质押量 (uint256)
+                if (results.length > 1 && successes[1] && results[1] !== '0x' && results[1].length === 66) {
+                    return BigInt(results[1]);
+                }
+                
+                // 备选
+                for (let i = 0; i < results.length; i++) {
+                    if (successes[i] && results[i] && results[i].length === 66) {
+                        const val = BigInt(results[i]);
+                        if (val > 1000n) return val;
+                    }
+                }
+            } catch {
+                const hexStr = rawData.replace('0x', '');
+                if (hexStr.length >= 64) {
+                    const val = BigInt('0x' + hexStr.substring(hexStr.length - 64));
+                    if (val > 0n && val < 1000000000000000000000000n) return val;
+                }
+            }
+        } catch {}
+        return 0n;
     }
 
     private async safeAggregate(calls: any[], chunkSize: number = 8): Promise<any[]> {
@@ -86,7 +113,6 @@ export class BlockchainService {
                 const response = await this.multicallContract.aggregate3(chunk);
                 results.push(...response);
             } catch (e) {
-                console.warn(`Sub-chunk failed, filling with nulls. Size: ${chunk.length}`);
                 results.push(...chunk.map(() => ({ success: false, returnData: '0x' })));
             }
         }
@@ -140,7 +166,7 @@ export class BlockchainService {
                 });
 
                 if (detailCalls.length > 0) {
-                    const detailRes = await this.safeAggregate(detailCalls, 8); // 更小的分片
+                    const detailRes = await this.safeAggregate(detailCalls, 8);
                     let di = 0;
                     mintCounts.forEach(count => { 
                         for(let j=0; j < count; j++) {
@@ -156,14 +182,11 @@ export class BlockchainService {
                     });
                 }
 
+                // 核心：总质押合计直接取专用脚本结果，不再手动累加 Mint + Bond
                 const contractTotal = await this.queryTotalStaking(addr.aAddress);
-                // 核心修复逻辑：计算兜底
-                // 如果 contractTotal 为 0，但 mint 或 bond 有数据，则使用 mint+bond 之和
-                const calculatedTotal = mintTotal + bondTotal;
-                const finalTotal = contractTotal > 0n ? contractTotal : calculatedTotal;
                 
                 resultsMap.set(addr.aAddress, {
-                    totalStaking: ethers.formatUnits(finalTotal, 9),
+                    totalStaking: ethers.formatUnits(contractTotal, 9),
                     mintStaking: ethers.formatUnits(mintTotal, 9),
                     bondStaking: ethers.formatUnits(bondTotal, 9),
                     spiderWebReward: ethers.formatUnits(spiderReward, 9),
