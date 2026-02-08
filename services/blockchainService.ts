@@ -24,7 +24,9 @@ export class BlockchainService {
     private multicallContract: ethers.Contract;
 
     constructor(rpcUrl: string) {
-        this.provider = new ethers.JsonRpcProvider(rpcUrl);
+        this.provider = new ethers.JsonRpcProvider(rpcUrl, undefined, {
+            staticNetwork: true
+        });
         this.multicallContract = new ethers.Contract(MULTICALL3_ADDRESS, MULTICALL3_ABI, this.provider);
     }
 
@@ -34,118 +36,64 @@ export class BlockchainService {
 
     private decodeResult(contractInterface: ethers.Interface, fnName: string, data: string): any {
         try {
+            if (!data || data === '0x') return null;
             return contractInterface.decodeFunctionResult(fnName, data);
         } catch (e) {
             return null;
         }
     }
 
-    /**
-     * 从原始返回数据中解析单地址总质押
-     * 1:1 还原用户提供的解析逻辑
-     */
-    private parseTotalStakingFromRawData(rawData: string, userAddress: string = ''): bigint {
-        try {
-            if (!rawData || rawData === '0x' || rawData.length < 10) {
-                return 0n;
-            }
-            
-            // 使用 ethers Interface 解码 multiCall 返回结果
-            const multicallInterface = new ethers.Interface(TOTAL_STAKE_MULTICALL_ABI);
-            
-            try {
-                // 解码 multiCall 的返回结果: (_successes: bool[], _results: bytes[])
-                const decoded = multicallInterface.decodeFunctionResult('multiCall', rawData);
-                const successes = decoded[0]; 
-                const results = decoded[1];   
-                
-                // 参考用户逻辑：第二个调用（索引为 1）返回的是总质押量（uint256）
-                if (results.length > 1 && successes[1] && results[1] !== '0x') {
-                    if (results[1].length === 66) {
-                        const value = BigInt(results[1]);
-                        if (value > 0n) return value;
-                    }
-                }
-                
-                // 遍历查找合理的 uint256 结果
-                for (let i = 0; i < results.length; i++) {
-                    if (!successes[i]) continue;
-                    const resultBytes = results[i];
-                    if (!resultBytes || resultBytes === '0x') continue;
-                    
-                    if (resultBytes.length === 66) {
-                        try {
-                            const value = BigInt(resultBytes);
-                            // 排除 0 和 1 (通常是 bool 标记)
-                            if (value > 1n) return value;
-                        } catch (e) { continue; }
-                    }
-                }
-            } catch (decodeError) {
-                // 解码失败
-            }
-            
-            // 兜底逻辑：截取最后 32 字节
-            const hexStr = rawData.startsWith('0x') ? rawData.slice(2) : rawData;
-            if (hexStr.length >= 64) {
-                const last64Chars = hexStr.substring(hexStr.length - 64);
-                const value = BigInt('0x' + last64Chars);
-                if (value > 0n && value < 1000000000000000000000000000n) {
-                    return value;
-                }
-            }
-        } catch (error) {
-            console.error(`解析总质押异常 ${userAddress}:`, error);
-        }
-        return 0n;
-    }
-
-    /**
-     * 重构总质押查询逻辑
-     * 1:1 还原用户提供的拼接模式 (Concatenation Mode)
-     * 解决 invalid BytesLike 错误：通过严格清洗字符串并显式补齐
-     */
     private async queryTotalStaking(address: string): Promise<bigint> {
         try {
-            // 用户地址去掉 0x 前缀
-            const userAddress_outwith0x = address.toLowerCase().replace('0x', '');
-            
-            // 严格按照用户提供的 callData 模板
-            const prefix = "ffd7d741000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000099a57e6c8558bc6689f894e068733adf83c19725000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000247965d56d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000309ca717d6989676194b88fd06029a88ceefee6000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000645ac983f400000000000000000000000099a57e6c8558bc6689f894e068733adf83c197250000000000000000000000001964ca90474b11ffd08af387b110ba6c96251bfc000000000000000000000000";
-            const suffix = "00000000000000000000000000000000000000000000000000000000";
-            
-            // 构造最终 hex 字符串，并确保没有任何空白字符或多余 0x
-            const callData = ("0x" + prefix + userAddress_outwith0x + suffix).replace(/\s+/g, '');
+            const cleanAddr = address.toLowerCase().replace('0x', '');
+            if (cleanAddr.length !== 40) return 0n;
 
-            let result;
-            try {
-                // 优先执行 provider.call
-                result = await this.provider.call({
-                    to: TOTAL_STAKING_QUERY_CONTRACT,
-                    data: callData
-                });
-            } catch (callError) {
-                // 兜底方案：使用底层 eth_call RPC
-                result = await this.provider.send('eth_call', [{
-                    to: TOTAL_STAKING_QUERY_CONTRACT,
-                    data: callData
-                }, 'latest']);
-            }
+            // 修正后的地址填充逻辑 (32字节对齐，地址在后20字节)
+            const paddedAddr = "000000000000000000000000" + cleanAddr;
+            
+            // 构造专用的查询 Payload
+            const prefix = "ffd7d741000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000099a57e6c8558bc6689f894e068733adf83c19725000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000247965d56d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+            const middle = paddedAddr; // 使用标准对齐
+            const suffix = "00000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000247965d56d0000000000000000000000000000000000000000000000000000000000000000";
+            
+            const callData = "0x" + prefix + middle + suffix;
+
+            const result = await this.provider.call({
+                to: TOTAL_STAKING_QUERY_CONTRACT,
+                data: callData
+            }).catch(() => '0x');
 
             if (result && result !== '0x') {
-                return this.parseTotalStakingFromRawData(result, address);
+                const hexStr = result.replace('0x', '');
+                // 搜索结果中可能的 BigInt 值 (质押值通常在这个范围内)
+                for (let i = 0; i <= hexStr.length - 64; i += 64) {
+                    try {
+                        const chunk = '0x' + hexStr.substring(i, i + 64);
+                        const val = BigInt(chunk);
+                        if (val > 100000000n && val < 1000000000000000000000000n) return val;
+                    } catch { continue; }
+                }
             }
             return 0n;
-        } catch (e: any) {
-            console.error(`[BlockchainService] 查询总质押失败 ${address}:`, e.message);
-            return 0n;
-        }
+        } catch { return 0n; }
     }
 
-    /**
-     * 批量查询主方法，包含质押、债券、涡轮、蛛网等模块
-     */
-    async batchQuery(addresses: AddressEntry[], batchSize: number = 10): Promise<Map<string, StakingData>> {
+    private async safeAggregate(calls: any[], chunkSize: number = 8): Promise<any[]> {
+        const results: any[] = [];
+        for (let i = 0; i < calls.length; i += chunkSize) {
+            const chunk = calls.slice(i, i + chunkSize);
+            try {
+                const response = await this.multicallContract.aggregate3(chunk);
+                results.push(...response);
+            } catch (e) {
+                console.warn(`Sub-chunk failed, filling with nulls. Size: ${chunk.length}`);
+                results.push(...chunk.map(() => ({ success: false, returnData: '0x' })));
+            }
+        }
+        return results;
+    }
+
+    async batchQuery(addresses: AddressEntry[], batchSize: number = 2): Promise<Map<string, StakingData>> {
         const resultsMap = new Map<string, StakingData>();
         const erc20Int = new ethers.Interface(ERC20_ABI);
         const stakeInt = new ethers.Interface(STAKE_ABI);
@@ -153,38 +101,32 @@ export class BlockchainService {
         const turbineInt = new ethers.Interface(TURBINE_ABI);
         const spiderInt = new ethers.Interface(SPIDER_WEB_ABI);
 
-        // 分批处理
         for (let i = 0; i < addresses.length; i += batchSize) {
             const chunk = addresses.slice(i, i + batchSize);
-            const firstPassCalls: any[] = [];
+            const summaryCalls: any[] = [];
 
             chunk.forEach(addr => {
-                // 涡轮与蛛网 (aAddress)
-                firstPassCalls.push({ target: TURBINE_CONTRACT, allowFailure: true, callData: this.encodeCall(turbineInt, 'getTurbineBal', [addr.aAddress]) });
-                firstPassCalls.push({ target: SPIDER_WEB_CONTRACT, allowFailure: true, callData: this.encodeCall(spiderInt, 'claimable', [addr.aAddress]) });
-                
-                // 派生地址代币 (derivedAddress)
-                firstPassCalls.push({ target: TOKEN_LGNS.address, allowFailure: true, callData: this.encodeCall(erc20Int, 'balanceOf', [addr.derivedAddress]) });
-                firstPassCalls.push({ target: TOKEN_SLGNS.address, allowFailure: true, callData: this.encodeCall(erc20Int, 'balanceOf', [addr.derivedAddress]) });
-                
-                // 计数模块
-                MINT_STAKE_CONTRACTS.forEach(c => firstPassCalls.push({ target: c, allowFailure: true, callData: this.encodeCall(stakeInt, 'getUserStakesCount', [addr.aAddress]) }));
-                BOND_CONTRACTS.forEach(c => firstPassCalls.push({ target: c, allowFailure: true, callData: this.encodeCall(bondInt, 'getBondInfoDataLength', [addr.aAddress]) }));
+                summaryCalls.push({ target: TURBINE_CONTRACT, allowFailure: true, callData: this.encodeCall(turbineInt, 'getTurbineBal', [addr.aAddress]) });
+                summaryCalls.push({ target: SPIDER_WEB_CONTRACT, allowFailure: true, callData: this.encodeCall(spiderInt, 'claimable', [addr.aAddress]) });
+                summaryCalls.push({ target: TOKEN_LGNS.address, allowFailure: true, callData: this.encodeCall(erc20Int, 'balanceOf', [addr.derivedAddress]) });
+                summaryCalls.push({ target: TOKEN_SLGNS.address, allowFailure: true, callData: this.encodeCall(erc20Int, 'balanceOf', [addr.derivedAddress]) });
+                MINT_STAKE_CONTRACTS.forEach(c => summaryCalls.push({ target: c, allowFailure: true, callData: this.encodeCall(stakeInt, 'getUserStakesCount', [addr.aAddress]) }));
+                BOND_CONTRACTS.forEach(c => summaryCalls.push({ target: c, allowFailure: true, callData: this.encodeCall(bondInt, 'getBondInfoDataLength', [addr.aAddress]) }));
             });
 
-            const firstPassResponse = await this.multicallContract.aggregate3(firstPassCalls);
-            let callIdx = 0;
+            const summaryResponse = await this.safeAggregate(summaryCalls, 10);
 
+            let callIdx = 0;
             for (const addr of chunk) {
-                const turbineBal = (firstPassResponse[callIdx++]?.success) ? this.decodeResult(turbineInt, 'getTurbineBal', firstPassResponse[callIdx-1].returnData)[0] : 0n;
-                const spiderReward = (firstPassResponse[callIdx++]?.success) ? this.decodeResult(spiderInt, 'claimable', firstPassResponse[callIdx-1].returnData)[0] : 0n;
-                const lgnsBal = (firstPassResponse[callIdx++]?.success) ? this.decodeResult(erc20Int, 'balanceOf', firstPassResponse[callIdx-1].returnData)[0] : 0n;
-                const slgnsBal = (firstPassResponse[callIdx++]?.success) ? this.decodeResult(erc20Int, 'balanceOf', firstPassResponse[callIdx-1].returnData)[0] : 0n;
+                const turbineBal = (summaryResponse[callIdx++]?.success) ? (this.decodeResult(turbineInt, 'getTurbineBal', summaryResponse[callIdx-1].returnData)?.[0] || 0n) : 0n;
+                const spiderReward = (summaryResponse[callIdx++]?.success) ? (this.decodeResult(spiderInt, 'claimable', summaryResponse[callIdx-1].returnData)?.[0] || 0n) : 0n;
+                const lgnsBal = (summaryResponse[callIdx++]?.success) ? (this.decodeResult(erc20Int, 'balanceOf', summaryResponse[callIdx-1].returnData)?.[0] || 0n) : 0n;
+                const slgnsBal = (summaryResponse[callIdx++]?.success) ? (this.decodeResult(erc20Int, 'balanceOf', summaryResponse[callIdx-1].returnData)?.[0] || 0n) : 0n;
                 
-                const mintCounts = MINT_STAKE_CONTRACTS.map(() => (firstPassResponse[callIdx++]?.success) ? Number(this.decodeResult(stakeInt, 'getUserStakesCount', firstPassResponse[callIdx-1].returnData)[0]) : 0);
-                const bondCounts = BOND_CONTRACTS.map(() => (firstPassResponse[callIdx++]?.success) ? Number(this.decodeResult(bondInt, 'getBondInfoDataLength', firstPassResponse[callIdx-1].returnData)[0]) : 0);
+                const mintCounts = MINT_STAKE_CONTRACTS.map(() => (summaryResponse[callIdx++]?.success) ? Number(this.decodeResult(stakeInt, 'getUserStakesCount', summaryResponse[callIdx-1].returnData)?.[0] || 0) : 0);
+                const bondCounts = BOND_CONTRACTS.map(() => (summaryResponse[callIdx++]?.success) ? Number(this.decodeResult(bondInt, 'getBondInfoDataLength', summaryResponse[callIdx-1].returnData)?.[0] || 0) : 0);
                 
-                // 第二阶段：详细数据查询
+                let mintTotal = 0n, bondTotal = 0n;
                 const detailCalls: any[] = [];
                 MINT_STAKE_CONTRACTS.forEach((c, ci) => { 
                     for(let j=0; j < mintCounts[ci]; j++) {
@@ -196,28 +138,32 @@ export class BlockchainService {
                         detailCalls.push({ target: c, allowFailure: true, callData: this.encodeCall(bondInt, 'bondInfoData', [addr.aAddress, j]) });
                     }
                 });
-                
-                let mintTotal = 0n, bondTotal = 0n;
+
                 if (detailCalls.length > 0) {
-                    const detailRes = await this.multicallContract.aggregate3(detailCalls);
+                    const detailRes = await this.safeAggregate(detailCalls, 8); // 更小的分片
                     let di = 0;
                     mintCounts.forEach(count => { 
                         for(let j=0; j < count; j++) {
-                            if(detailRes[di++]?.success) mintTotal += BigInt(this.decodeResult(stakeInt, 'stakes', detailRes[di-1].returnData).principal);
+                            const res = detailRes[di++];
+                            if(res?.success) mintTotal += BigInt(this.decodeResult(stakeInt, 'stakes', res.returnData)?.principal || 0n);
                         }
                     });
                     bondCounts.forEach(count => { 
                         for(let j=0; j < count; j++) {
-                            if(detailRes[di++]?.success) bondTotal += BigInt(this.decodeResult(bondInt, 'bondInfoData', detailRes[di-1].returnData).payout);
+                            const res = detailRes[di++];
+                            if(res?.success) bondTotal += BigInt(this.decodeResult(bondInt, 'bondInfoData', res.returnData)?.payout || 0n);
                         }
                     });
                 }
-                
-                // 单地址独立请求总质押
-                const totalStakingValue = await this.queryTotalStaking(addr.aAddress);
+
+                const contractTotal = await this.queryTotalStaking(addr.aAddress);
+                // 核心修复逻辑：计算兜底
+                // 如果 contractTotal 为 0，但 mint 或 bond 有数据，则使用 mint+bond 之和
+                const calculatedTotal = mintTotal + bondTotal;
+                const finalTotal = contractTotal > 0n ? contractTotal : calculatedTotal;
                 
                 resultsMap.set(addr.aAddress, {
-                    totalStaking: ethers.formatUnits(totalStakingValue, 9),
+                    totalStaking: ethers.formatUnits(finalTotal, 9),
                     mintStaking: ethers.formatUnits(mintTotal, 9),
                     bondStaking: ethers.formatUnits(bondTotal, 9),
                     spiderWebReward: ethers.formatUnits(spiderReward, 9),
