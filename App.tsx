@@ -15,7 +15,10 @@ import {
     Info,
     Coins,
     Layers,
-    FileJson
+    FileJson,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown
 } from 'lucide-react';
 import React, { useState, useEffect, useMemo } from 'react';
 import { AddressEntry, StakingData } from './types.ts';
@@ -32,6 +35,8 @@ const INITIAL_ADDRESSES: AddressEntry[] = [
     }
 ];
 
+type SortDirection = 'asc' | 'desc' | null;
+
 export default function App() {
     const [addresses, setAddresses] = useState<AddressEntry[]>([]);
     const [stakingData, setStakingData] = useState<Record<string, StakingData>>({});
@@ -42,6 +47,7 @@ export default function App() {
     const [editingRemark, setEditingRemark] = useState<{ address: string, value: string } | null>(null);
     const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
     const [rpcStatus, setRpcStatus] = useState<'idle' | 'ok' | 'error'>('idle');
+    const [sortDirection, setSortDirection] = useState<SortDirection>(null);
 
     useEffect(() => {
         const saved = localStorage.getItem('polygon_addresses');
@@ -115,16 +121,32 @@ export default function App() {
         setTimeout(() => setCopiedAddress(null), 2000);
     };
 
-    const filteredAddresses = useMemo(() => {
-        return addresses.filter(a => 
+    const handleSortToggle = () => {
+        if (sortDirection === null) setSortDirection('desc');
+        else if (sortDirection === 'desc') setSortDirection('asc');
+        else setSortDirection(null);
+    };
+
+    const displayAddresses = useMemo(() => {
+        let result = addresses.filter(a => 
             (a.remark || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
             (a.aAddress || "").toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [addresses, searchTerm]);
+
+        if (sortDirection) {
+            result.sort((a, b) => {
+                const valA = parseFloat(stakingData[a.aAddress]?.derivedLgns || '0');
+                const valB = parseFloat(stakingData[b.aAddress]?.derivedLgns || '0');
+                return sortDirection === 'asc' ? valA - valB : valB - valA;
+            });
+        }
+
+        return result;
+    }, [addresses, searchTerm, stakingData, sortDirection]);
 
     const globalStats = useMemo(() => {
         let totals = { val: 0, turb: 0, spid: 0, mint: 0, bond: 0, s600: 0, dlgns: 0, dslgns: 0 };
-        filteredAddresses.forEach(addr => {
+        displayAddresses.forEach(addr => {
             const data = stakingData[addr.aAddress];
             if (data) {
                 totals.val += parseFloat(data.totalStaking) || 0;
@@ -138,7 +160,7 @@ export default function App() {
             }
         });
         return totals;
-    }, [stakingData, filteredAddresses]);
+    }, [stakingData, displayAddresses]);
 
     return (
         <div className="max-w-[1600px] mx-auto px-4 py-6 pb-12">
@@ -235,12 +257,22 @@ export default function App() {
                                 <th className="px-4 py-6 w-[18%]">Staking Breakdown</th>
                                 <th className="px-4 py-6 w-[18%] text-center">总质押合计</th>
                                 <th className="px-4 py-6 w-[15%] text-right">Yield Portfolio</th>
-                                <th className="px-4 py-6 w-[18%]">Governance Assets</th>
+                                <th 
+                                    className="px-4 py-6 w-[18%] cursor-pointer group/header select-none hover:bg-white/[0.02] transition-colors"
+                                    onClick={handleSortToggle}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        Governance Assets
+                                        <div className={`p-1 rounded bg-slate-800 transition-all ${sortDirection ? 'text-indigo-400' : 'text-slate-600'}`}>
+                                            {sortDirection === 'desc' ? <ArrowDown className="w-3 h-3" /> : sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-30" />}
+                                        </div>
+                                    </div>
+                                </th>
                                 <th className="px-8 py-6 w-[13%] text-center">Pulse</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/[0.02]">
-                            {filteredAddresses.map((addr) => {
+                            {displayAddresses.map((addr) => {
                                 const data = stakingData[addr.aAddress];
                                 return (
                                     <tr key={addr.aAddress} className="group hover:bg-indigo-500/[0.02] transition-colors border-b border-white/[0.01]">
