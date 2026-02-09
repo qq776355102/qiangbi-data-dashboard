@@ -289,7 +289,7 @@ export default function App() {
                                             <div className="flex flex-col items-center">
                                                 <div className="bg-black rounded-3xl px-8 py-4 border border-white/5 shadow-inner group-hover:border-indigo-500/30 transition-all min-w-[140px] text-center">
                                                     <span className="text-2xl font-black text-white tracking-tighter italic">
-                                                        {formatNum(data?.totalStaking || '0', 3, 8)}
+                                                        {formatNum(data?.totalStaking || '0', 2, 2)}
                                                     </span>
                                                 </div>
                                                 <span className="text-[7px] text-slate-600 font-black mt-2 tracking-[0.2em] uppercase">AGGREGATED TOTAL</span>
@@ -360,12 +360,12 @@ function MiniBar({ label, value, color }: { label: string, value: number, color:
     return (
         <div className={`flex flex-col px-5 py-3 rounded-2xl border ${colorMap[color]} backdrop-blur-sm min-w-[140px]`}>
             <span className="text-[8px] font-black tracking-widest uppercase opacity-60 mb-1">{label}</span>
-            <span className="text-lg font-black tracking-tighter">{value.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+            <span className="text-lg font-black tracking-tighter">{value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
         </div>
     );
 }
 
-function formatNum(val: string, minDec = 2, maxDec = 3) {
+function formatNum(val: string, minDec = 2, maxDec = 2) {
     const n = parseFloat(val);
     if (isNaN(n) || n === 0) return '0.00';
     return n.toLocaleString(undefined, { minimumFractionDigits: minDec, maximumFractionDigits: maxDec });
