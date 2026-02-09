@@ -24,10 +24,10 @@ import { BlockchainService } from './services/blockchainService.ts';
 
 const INITIAL_ADDRESSES: AddressEntry[] = [
     {
-      aAddress: "0x80cB03984E41CBdaE772D7090f66fa699A3CDF3F",
+      aAddress: "0xC37E77d615f76Ec8e45C36958a0737883473AD95",
       log: "5月20号",
       remark: "Demo Account",
-      derivedAddress: "0x309ca717d6989676194b88fd06029a88ceefee60",
+      derivedAddress: "0x78D610443156584b7aacDE6102B5AEABE2C51F85",
       split: "5-5开"
     }
 ];
@@ -36,7 +36,7 @@ export default function App() {
     const [addresses, setAddresses] = useState<AddressEntry[]>([]);
     const [stakingData, setStakingData] = useState<Record<string, StakingData>>({});
     const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC);
-    const [batchSize, setBatchSize] = useState(5); // 默认 5 个地址一批
+    const [batchSize, setBatchSize] = useState(20); 
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(false);
     const [editingRemark, setEditingRemark] = useState<{ address: string, value: string } | null>(null);
@@ -123,7 +123,7 @@ export default function App() {
     }, [addresses, searchTerm]);
 
     const globalStats = useMemo(() => {
-        let totals = { val: 0, turb: 0, spid: 0, mint: 0, bond: 0, dlgns: 0, dslgns: 0 };
+        let totals = { val: 0, turb: 0, spid: 0, mint: 0, bond: 0, s600: 0, dlgns: 0, dslgns: 0 };
         filteredAddresses.forEach(addr => {
             const data = stakingData[addr.aAddress];
             if (data) {
@@ -132,6 +132,7 @@ export default function App() {
                 totals.spid += parseFloat(data.spiderWebReward) || 0;
                 totals.mint += parseFloat(data.mintStaking) || 0;
                 totals.bond += parseFloat(data.bondStaking) || 0;
+                totals.s600 += parseFloat(data.staking600Principal) || 0;
                 totals.dlgns += parseFloat(data.derivedLgns) || 0;
                 totals.dslgns += parseFloat(data.derivedSlgns) || 0;
             }
@@ -162,9 +163,12 @@ export default function App() {
                             onChange={(e) => setBatchSize(Number(e.target.value))}
                             className="bg-transparent text-indigo-400 text-[10px] font-black outline-none cursor-pointer tracking-widest uppercase"
                         >
-                            <option value={2}>Stable (2)</option>
-                            <option value={5}>Fast (5)</option>
-                            <option value={10}>Max (10)</option>
+                            <option value={5}>Stable (5)</option>
+                            <option value={10}>Normal (10)</option>
+                            <option value={20}>Fast (20)</option>
+                            <option value={30}>Turbo (30)</option>
+                            <option value={40}>Pro (40)</option>
+                            <option value={50}>Ultra (50)</option>
                         </select>
                     </div>
                     <input 
@@ -182,7 +186,7 @@ export default function App() {
                         }`}
                     >
                         <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        {loading ? 'SYNC...' : 'REFRESH'}
+                        {loading ? 'SYNCING...' : 'REFRESH'}
                     </button>
                 </div>
             </header>
@@ -192,6 +196,7 @@ export default function App() {
                 <MiniBar label="TOTAL STAKED" value={globalStats.val} color="indigo" />
                 <MiniBar label="MINT POOL" value={globalStats.mint} color="blue" />
                 <MiniBar label="BOND ASSETS" value={globalStats.bond} color="purple" />
+                <MiniBar label="600D POOL" value={globalStats.s600} color="indigo" />
                 <MiniBar label="TURBINE" value={globalStats.turb} color="emerald" />
                 <MiniBar label="SPIDER" value={globalStats.spid} color="amber" />
                 <MiniBar label="LGNS" value={globalStats.dlgns} color="pink" />
@@ -226,12 +231,12 @@ export default function App() {
                     <table className="w-full text-left border-collapse table-fixed">
                         <thead>
                             <tr className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] bg-white/[0.01]">
-                                <th className="px-8 py-6 w-[20%]">Wallet Identity</th>
-                                <th className="px-4 py-6 w-[15%]">Staking Breakdown</th>
-                                <th className="px-4 py-6 w-[20%] text-center">总质押合计</th>
+                                <th className="px-8 py-6 w-[18%]">Wallet Identity</th>
+                                <th className="px-4 py-6 w-[18%]">Staking Breakdown</th>
+                                <th className="px-4 py-6 w-[18%] text-center">总质押合计</th>
                                 <th className="px-4 py-6 w-[15%] text-right">Yield Portfolio</th>
-                                <th className="px-4 py-6 w-[20%]">Governance Assets</th>
-                                <th className="px-8 py-6 w-[10%] text-center">Pulse</th>
+                                <th className="px-4 py-6 w-[18%]">Governance Assets</th>
+                                <th className="px-8 py-6 w-[13%] text-center">Pulse</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/[0.02]">
@@ -239,12 +244,12 @@ export default function App() {
                                 const data = stakingData[addr.aAddress];
                                 return (
                                     <tr key={addr.aAddress} className="group hover:bg-indigo-500/[0.02] transition-colors border-b border-white/[0.01]">
-                                        {/* Wallet Identity - 更窄更紧凑 */}
+                                        {/* Wallet Identity */}
                                         <td className="px-8 py-8">
                                             <div className="flex flex-col gap-2">
                                                 <div className="flex items-center gap-2">
                                                     {editingRemark?.address === addr.aAddress ? (
-                                                        <input autoFocus className="bg-black border border-indigo-500/50 rounded-lg px-3 py-1 text-white outline-none w-full text-lg" value={editingRemark.value} onChange={(e) => setEditingRemark({ ...editingRemark, value: e.target.value })} onBlur={() => handleUpdateRemark(addr.aAddress, editingRemark.value)} />
+                                                        <input autoFocus className="bg-black border border-indigo-500/50 rounded-lg px-3 py-1 text-white outline-none w-full text-lg font-black" value={editingRemark.value} onChange={(e) => setEditingRemark({ ...editingRemark, value: e.target.value })} onBlur={() => handleUpdateRemark(addr.aAddress, editingRemark.value)} />
                                                     ) : (
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-black text-xl text-slate-100 tracking-tighter group-hover:text-indigo-400 transition-colors">{addr.remark || 'N/A'}</span>
@@ -261,29 +266,33 @@ export default function App() {
                                             </div>
                                         </td>
 
-                                        {/* Staking Breakdown - 左对齐紧贴身份 */}
+                                        {/* Staking Breakdown */}
                                         <td className="px-4 py-8">
                                             <div className="flex flex-col gap-2">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="text-[7px] font-black bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">MINT</div>
+                                                    <div className="w-10 text-[7px] font-black bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 text-center">MINT</div>
                                                     <span className="font-black text-white text-base">{formatNum(data?.mintStaking || '0')}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <div className="text-[7px] font-black bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20">BOND</div>
+                                                    <div className="w-10 text-[7px] font-black bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20 text-center">BOND</div>
                                                     <span className="font-black text-white text-base">{formatNum(data?.bondStaking || '0')}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-10 text-[7px] font-black bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30 text-center">600D</div>
+                                                    <span className="font-black text-white text-base">{formatNum(data?.staking600Principal || '0')}</span>
                                                 </div>
                                             </div>
                                         </td>
 
-                                        {/* 总质押合计 - 核心视觉 */}
+                                        {/* 总质押合计 */}
                                         <td className="px-4 py-8">
                                             <div className="flex flex-col items-center">
                                                 <div className="bg-black rounded-3xl px-8 py-4 border border-white/5 shadow-inner group-hover:border-indigo-500/30 transition-all min-w-[140px] text-center">
                                                     <span className="text-2xl font-black text-white tracking-tighter italic">
-                                                        {formatNum(data?.totalStaking || '0')}
+                                                        {formatNum(data?.totalStaking || '0', 3, 8)}
                                                     </span>
                                                 </div>
-                                                <span className="text-[7px] text-slate-600 font-black mt-2 tracking-[0.2em] uppercase">9-DEC MULTIPLIER</span>
+                                                <span className="text-[7px] text-slate-600 font-black mt-2 tracking-[0.2em] uppercase">AGGREGATED TOTAL</span>
                                             </div>
                                         </td>
 
@@ -320,6 +329,11 @@ export default function App() {
                                             <div className="inline-block px-3 py-1.5 bg-black/40 rounded-lg border border-white/5 text-slate-600 font-black text-[8px] tracking-widest group-hover:text-indigo-400 transition-all">
                                                 {addr.log}
                                             </div>
+                                            {data?.lastUpdated && (
+                                                <div className="text-[7px] text-slate-700 mt-2 font-mono">
+                                                    {new Date(data.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </div>
+                                            )}
                                         </td>
                                     </tr>
                                 );
@@ -351,8 +365,8 @@ function MiniBar({ label, value, color }: { label: string, value: number, color:
     );
 }
 
-function formatNum(val: string) {
+function formatNum(val: string, minDec = 2, maxDec = 3) {
     const n = parseFloat(val);
     if (isNaN(n) || n === 0) return '0.00';
-    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+    return n.toLocaleString(undefined, { minimumFractionDigits: minDec, maximumFractionDigits: maxDec });
 }

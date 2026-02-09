@@ -11,6 +11,7 @@ export interface StakingData {
   totalStaking: string;
   mintStaking: string;
   bondStaking: string;
+  staking600Principal: string; // New 600-day staking data
   spiderWebReward: string;
   turbineBalance: string;
   derivedLgns: string;
