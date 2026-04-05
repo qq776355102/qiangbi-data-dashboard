@@ -21,6 +21,7 @@ export const STAKING_600_CONTRACT = "0x8ca97f41d2c81af050656e8ad0cf543820a24504"
 
 export const TURBINE_CONTRACT = "0x07Ff4e06865de4934409Aa6eCea503b08Cc1C78d";
 export const SPIDER_WEB_CONTRACT = "0x806FDAb92B0Fc7fBE4bbBE5117A54cAa9283d5a4";
+export const DAO_CLAIMABLE_CONTRACT = "0xa49aba84930299c6c2d537456a3e681bb4500f15";
 export const TOTAL_STAKING_QUERY_CONTRACT = "0xdbbfa3cb3b087b64f4ef5e3d20dda2488aa244e6";
 
 export const TOKEN_LGNS: TokenConfig = {
@@ -42,7 +43,8 @@ export const ERC20_ABI = [
 
 export const STAKE_ABI = [
     "function getUserStakesCount(address user) view returns (uint256)",
-    "function stakes(address user, uint256 index) view returns (uint256 principal, uint256 gons, uint256 startBlock, uint256 expiry, uint256 warmup, uint256 lastBlock, uint256 vesting, bool exists)"
+    "function stakes(address user, uint256 index) view returns (uint256 principal, uint256 gons, uint256 startBlock, uint256 expiry, uint256 warmup, uint256 lastBlock, uint256 vesting, bool exists)",
+    "function getDepositorBalance(address user) view returns (uint256)"
 ];
 
 // 600D contract specific ABI (returns more fields, principal is first)

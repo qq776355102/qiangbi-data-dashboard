@@ -16,6 +16,7 @@ export interface StakingData {
   turbineBalance: string;
   derivedLgns: string;
   derivedSlgns: string;
+  daoClaimable: string;
   lastUpdated?: number;
 }
 

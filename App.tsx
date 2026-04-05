@@ -82,8 +82,13 @@ export default function App() {
             const service = new BlockchainService(rpcUrl);
             const results = await service.batchQuery(addresses, batchSize);
             const newStakingData = Object.fromEntries(results);
-            setStakingData(prev => ({ ...prev, ...newStakingData }));
-            localStorage.setItem('polygon_staking_stats', JSON.stringify({ ...stakingData, ...newStakingData }));
+            
+            setStakingData(prev => {
+                const updated = { ...prev, ...newStakingData };
+                localStorage.setItem('polygon_staking_stats', JSON.stringify(updated));
+                return updated;
+            });
+            
             setRpcStatus('ok');
         } catch (error) {
             console.error("Refresh error:", error);
@@ -145,13 +150,14 @@ export default function App() {
     }, [addresses, searchTerm, stakingData, sortDirection]);
 
     const globalStats = useMemo(() => {
-        let totals = { val: 0, turb: 0, spid: 0, mint: 0, bond: 0, s600: 0, dlgns: 0, dslgns: 0 };
+        let totals = { val: 0, turb: 0, spid: 0, dao: 0, mint: 0, bond: 0, s600: 0, dlgns: 0, dslgns: 0 };
         displayAddresses.forEach(addr => {
             const data = stakingData[addr.aAddress];
             if (data) {
                 totals.val += parseFloat(data.totalStaking) || 0;
                 totals.turb += parseFloat(data.turbineBalance) || 0;
                 totals.spid += parseFloat(data.spiderWebReward) || 0;
+                totals.dao += parseFloat(data.daoClaimable) || 0;
                 totals.mint += parseFloat(data.mintStaking) || 0;
                 totals.bond += parseFloat(data.bondStaking) || 0;
                 totals.s600 += parseFloat(data.staking600Principal) || 0;
@@ -221,6 +227,7 @@ export default function App() {
                 <MiniBar label="600D POOL" value={globalStats.s600} color="indigo" />
                 <MiniBar label="TURBINE" value={globalStats.turb} color="emerald" />
                 <MiniBar label="SPIDER" value={globalStats.spid} color="amber" />
+                <MiniBar label="DAO CLAIM" value={globalStats.dao} color="rose" />
                 <MiniBar label="LGNS" value={globalStats.dlgns} color="pink" />
                 <MiniBar label="SLGNS" value={globalStats.dslgns} color="cyan" />
             </div>
@@ -257,6 +264,7 @@ export default function App() {
                                 <th className="px-4 py-6 w-[18%]">Staking Breakdown</th>
                                 <th className="px-4 py-6 w-[18%] text-center">总质押合计</th>
                                 <th className="px-4 py-6 w-[15%] text-right">Yield Portfolio</th>
+                                <th className="px-4 py-6 w-[12%] text-right">DAO Claimable</th>
                                 <th 
                                     className="px-4 py-6 w-[18%] cursor-pointer group/header select-none hover:bg-white/[0.02] transition-colors"
                                     onClick={handleSortToggle}
@@ -342,6 +350,18 @@ export default function App() {
                                             </div>
                                         </td>
 
+                                        {/* DAO Claimable */}
+                                        <td className="px-4 py-8">
+                                            <div className="flex flex-col items-end gap-1">
+                                                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2 text-right group-hover:bg-rose-500/20 transition-all">
+                                                    <span className="text-rose-400 font-black text-sm block tracking-tighter">
+                                                        {formatNum(data?.daoClaimable || '0')}
+                                                    </span>
+                                                    <span className="text-[6px] text-rose-500/60 font-black uppercase tracking-widest">DAO LGNS</span>
+                                                </div>
+                                            </div>
+                                        </td>
+
                                         {/* Governance Assets */}
                                         <td className="px-4 py-8">
                                             <div className="flex flex-col gap-2 w-full max-w-[140px]">
@@ -385,6 +405,7 @@ function MiniBar({ label, value, color }: { label: string, value: number, color:
         purple: 'border-purple-500/30 text-purple-400 bg-purple-500/5',
         emerald: 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5',
         amber: 'border-amber-500/30 text-amber-400 bg-amber-500/5',
+        rose: 'border-rose-500/30 text-rose-400 bg-rose-500/5',
         pink: 'border-pink-500/30 text-pink-400 bg-pink-500/5',
         cyan: 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5',
     };
