@@ -13,6 +13,7 @@ import {
     MINT_STAKE_CONTRACTS,
     BOND_CONTRACTS,
     STAKING_600_CONTRACT,
+    STAKING_360_CONTRACT,
     TURBINE_CONTRACT,
     SPIDER_WEB_CONTRACT,
     DAO_CLAIMABLE_CONTRACT,
@@ -164,7 +165,11 @@ export class BlockchainService {
                     const complexData = await this.queryComplexStaking(addr);
 
                     resultsMap.set(addr.aAddress, {
-                        ...complexData,
+                        totalStaking: complexData.totalStaking || '0',
+                        mintStaking: complexData.mintStaking || '0',
+                        bondStaking: complexData.bondStaking || '0',
+                        staking600Principal: complexData.staking600Principal || '0',
+                        staking360Principal: complexData.staking360Principal || '0',
                         spiderWebReward: ethers.formatUnits(spid, 9),
                         turbineBalance: ethers.formatUnits(turb, 9),
                         daoClaimable: ethers.formatUnits(daoC, 9),
@@ -205,6 +210,7 @@ export class BlockchainService {
             summaryCalls.push({ target: c, allowFailure: true, callData: this.encodeCall(bondInt, 'getBondInfoDataLength', [addr.aAddress]) });
         });
         summaryCalls.push({ target: STAKING_600_CONTRACT, allowFailure: true, callData: this.encodeCall(stake600Int, 'getUserStakesCount', [addr.aAddress]) });
+        summaryCalls.push({ target: STAKING_360_CONTRACT, allowFailure: true, callData: this.encodeCall(stake600Int, 'getUserStakesCount', [addr.aAddress]) });
 
         const [totalStaking, summaryRes] = await Promise.all([
             totalStakingPromise,
@@ -222,12 +228,16 @@ export class BlockchainService {
 
         const bondCounts = BOND_CONTRACTS.map(() => (summaryRes[callIdx++]?.success) ? Number(this.decodeResult(bondInt, 'getBondInfoDataLength', summaryRes[callIdx-1].returnData)?.[0] || 0) : 0);
         const count600D = (summaryRes[callIdx++]?.success) ? Number(this.decodeResult(stake600Int, 'getUserStakesCount', summaryRes[callIdx-1].returnData)?.[0] || 0) : 0;
+        const count360D = (summaryRes[callIdx++]?.success) ? Number(this.decodeResult(stake600Int, 'getUserStakesCount', summaryRes[callIdx-1].returnData)?.[0] || 0) : 0;
 
-        // 3. Staking Details (600D and Bonds)
-        let bondT = 0n, total600T = 0n;
+        // 3. Staking Details (600D, 360D, and Bonds)
+        let bondT = 0n, total600T = 0n, total360T = 0n;
         const detailCalls: any[] = [];
         for (let j = 0; j < count600D; j++) {
             detailCalls.push({ target: STAKING_600_CONTRACT, allowFailure: true, callData: this.encodeCall(stake600Int, 'stakes', [addr.aAddress, j]) });
+        }
+        for (let j = 0; j < count360D; j++) {
+            detailCalls.push({ target: STAKING_360_CONTRACT, allowFailure: true, callData: this.encodeCall(stake600Int, 'stakes', [addr.aAddress, j]) });
         }
         BOND_CONTRACTS.forEach((c, ci) => {
             for (let j = 0; j < bondCounts[ci]; j++) {
@@ -242,6 +252,10 @@ export class BlockchainService {
                 const r = detailRes[di++];
                 if (r?.success) total600T += BigInt(this.decodeResult(stake600Int, 'stakes', r.returnData)?.principal || 0n);
             }
+            for (let j = 0; j < count360D; j++) {
+                const r = detailRes[di++];
+                if (r?.success) total360T += BigInt(this.decodeResult(stake600Int, 'stakes', r.returnData)?.principal || 0n);
+            }
             bondCounts.forEach(cnt => {
                 for (let j = 0; j < cnt; j++) {
                     const r = detailRes[di++];
@@ -254,7 +268,8 @@ export class BlockchainService {
             totalStaking: ethers.formatUnits(totalStaking, 9),
             mintStaking: ethers.formatUnits(mintT, 9),
             bondStaking: ethers.formatUnits(bondT, 9),
-            staking600Principal: ethers.formatUnits(total600T, 9)
+            staking600Principal: ethers.formatUnits(total600T, 9),
+            staking360Principal: ethers.formatUnits(total360T, 9)
         };
     }
 }

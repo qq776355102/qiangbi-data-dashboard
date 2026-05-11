@@ -140,8 +140,8 @@ export default function App() {
 
         if (sortDirection) {
             result.sort((a, b) => {
-                const valA = parseFloat(stakingData[a.aAddress]?.derivedLgns || '0');
-                const valB = parseFloat(stakingData[b.aAddress]?.derivedLgns || '0');
+                const valA = parseFloat(stakingData[a.aAddress]?.derivedLgns || '0') + parseFloat(stakingData[a.aAddress]?.derivedSlgns || '0');
+                const valB = parseFloat(stakingData[b.aAddress]?.derivedLgns || '0') + parseFloat(stakingData[b.aAddress]?.derivedSlgns || '0');
                 return sortDirection === 'asc' ? valA - valB : valB - valA;
             });
         }
@@ -150,7 +150,7 @@ export default function App() {
     }, [addresses, searchTerm, stakingData, sortDirection]);
 
     const globalStats = useMemo(() => {
-        let totals = { val: 0, turb: 0, spid: 0, dao: 0, mint: 0, bond: 0, s600: 0, dlgns: 0, dslgns: 0 };
+        let totals = { val: 0, turb: 0, spid: 0, dao: 0, mint: 0, bond: 0, s600: 0, s360: 0, dlgns: 0, dslgns: 0 };
         displayAddresses.forEach(addr => {
             const data = stakingData[addr.aAddress];
             if (data) {
@@ -161,6 +161,7 @@ export default function App() {
                 totals.mint += parseFloat(data.mintStaking) || 0;
                 totals.bond += parseFloat(data.bondStaking) || 0;
                 totals.s600 += parseFloat(data.staking600Principal) || 0;
+                totals.s360 += parseFloat(data.staking360Principal) || 0;
                 totals.dlgns += parseFloat(data.derivedLgns) || 0;
                 totals.dslgns += parseFloat(data.derivedSlgns) || 0;
             }
@@ -225,6 +226,7 @@ export default function App() {
                 <MiniBar label="MINT POOL" value={globalStats.mint} color="blue" />
                 <MiniBar label="BOND ASSETS" value={globalStats.bond} color="purple" />
                 <MiniBar label="600D POOL" value={globalStats.s600} color="indigo" />
+                <MiniBar label="360D POOL" value={globalStats.s360} color="sky" />
                 <MiniBar label="TURBINE" value={globalStats.turb} color="emerald" />
                 <MiniBar label="SPIDER" value={globalStats.spid} color="amber" />
                 <MiniBar label="DAO CLAIM" value={globalStats.dao} color="rose" />
@@ -321,6 +323,10 @@ export default function App() {
                                                     <div className="w-10 text-[7px] font-black bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30 text-center">600D</div>
                                                     <span className="font-black text-white text-base">{formatNum(data?.staking600Principal || '0')}</span>
                                                 </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-10 text-[7px] font-black bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/20 text-center">360D</div>
+                                                    <span className="font-black text-white text-base">{formatNum(data?.staking360Principal || '0')}</span>
+                                                </div>
                                             </div>
                                         </td>
 
@@ -408,6 +414,7 @@ function MiniBar({ label, value, color }: { label: string, value: number, color:
         rose: 'border-rose-500/30 text-rose-400 bg-rose-500/5',
         pink: 'border-pink-500/30 text-pink-400 bg-pink-500/5',
         cyan: 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5',
+        sky: 'border-sky-500/30 text-sky-400 bg-sky-500/5',
     };
 
     return (
