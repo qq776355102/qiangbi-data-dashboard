@@ -35,7 +35,8 @@ const INITIAL_ADDRESSES: AddressEntry[] = [
     }
 ];
 
-type SortDirection = 'asc' | 'desc' | null;
+type SortKey = 'total' | 'mint' | 'bond' | 'staking600' | 'staking360' | 'governance' | null;
+type SortDirection = 'asc' | 'desc';
 
 export default function App() {
     const [addresses, setAddresses] = useState<AddressEntry[]>([]);
@@ -47,7 +48,8 @@ export default function App() {
     const [editingRemark, setEditingRemark] = useState<{ address: string, value: string } | null>(null);
     const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
     const [rpcStatus, setRpcStatus] = useState<'idle' | 'ok' | 'error'>('idle');
-    const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+    const [sortKey, setSortKey] = useState<SortKey>(null);
+    const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
     useEffect(() => {
         const saved = localStorage.getItem('polygon_addresses');
@@ -126,10 +128,17 @@ export default function App() {
         setTimeout(() => setCopiedAddress(null), 2000);
     };
 
-    const handleSortToggle = () => {
-        if (sortDirection === null) setSortDirection('desc');
-        else if (sortDirection === 'desc') setSortDirection('asc');
-        else setSortDirection(null);
+    const handleSort = (key: SortKey) => {
+        if (sortKey !== key) {
+            setSortKey(key);
+            setSortDirection('desc');
+        } else {
+            if (sortDirection === 'desc') {
+                setSortDirection('asc');
+            } else {
+                setSortKey(null);
+            }
+        }
     };
 
     const displayAddresses = useMemo(() => {
@@ -138,16 +147,47 @@ export default function App() {
             (a.aAddress || "").toLowerCase().includes(searchTerm.toLowerCase())
         );
 
-        if (sortDirection) {
+        if (sortKey && sortDirection) {
             result.sort((a, b) => {
-                const valA = parseFloat(stakingData[a.aAddress]?.derivedLgns || '0') + parseFloat(stakingData[a.aAddress]?.derivedSlgns || '0');
-                const valB = parseFloat(stakingData[b.aAddress]?.derivedLgns || '0') + parseFloat(stakingData[b.aAddress]?.derivedSlgns || '0');
+                const dataA = stakingData[a.aAddress];
+                const dataB = stakingData[b.aAddress];
+
+                let valA = 0;
+                let valB = 0;
+
+                switch (sortKey) {
+                    case 'total':
+                        valA = parseFloat(dataA?.totalStaking || '0');
+                        valB = parseFloat(dataB?.totalStaking || '0');
+                        break;
+                    case 'mint':
+                        valA = parseFloat(dataA?.mintStaking || '0');
+                        valB = parseFloat(dataB?.mintStaking || '0');
+                        break;
+                    case 'bond':
+                        valA = parseFloat(dataA?.bondStaking || '0');
+                        valB = parseFloat(dataB?.bondStaking || '0');
+                        break;
+                    case 'staking600':
+                        valA = parseFloat(dataA?.staking600Principal || '0');
+                        valB = parseFloat(dataB?.staking600Principal || '0');
+                        break;
+                    case 'staking360':
+                        valA = parseFloat(dataA?.staking360Principal || '0');
+                        valB = parseFloat(dataB?.staking360Principal || '0');
+                        break;
+                    case 'governance':
+                        valA = parseFloat(dataA?.derivedLgns || '0') + parseFloat(dataA?.derivedSlgns || '0');
+                        valB = parseFloat(dataB?.derivedLgns || '0') + parseFloat(dataB?.derivedSlgns || '0');
+                        break;
+                }
+
                 return sortDirection === 'asc' ? valA - valB : valB - valA;
             });
         }
 
         return result;
-    }, [addresses, searchTerm, stakingData, sortDirection]);
+    }, [addresses, searchTerm, stakingData, sortKey, sortDirection]);
 
     const globalStats = useMemo(() => {
         let totals = { val: 0, turb: 0, spid: 0, dao: 0, mint: 0, bond: 0, s600: 0, s360: 0, dlgns: 0, dslgns: 0 };
@@ -222,30 +262,44 @@ export default function App() {
 
             {/* Global Quick Stats */}
             <div className="flex flex-wrap gap-4 mb-10">
-                <MiniBar label="TOTAL STAKED" value={globalStats.val} color="indigo" />
-                <MiniBar label="MINT POOL" value={globalStats.mint} color="blue" />
-                <MiniBar label="BOND ASSETS" value={globalStats.bond} color="purple" />
-                <MiniBar label="600D POOL" value={globalStats.s600} color="indigo" />
-                <MiniBar label="360D POOL" value={globalStats.s360} color="sky" />
+                <MiniBar label="TOTAL STAKED" value={globalStats.val} color="indigo" onClick={() => handleSort('total')} active={sortKey === 'total'} sortDir={sortKey === 'total' ? sortDirection : undefined} />
+                <MiniBar label="MINT POOL" value={globalStats.mint} color="blue" onClick={() => handleSort('mint')} active={sortKey === 'mint'} sortDir={sortKey === 'mint' ? sortDirection : undefined} />
+                <MiniBar label="BOND ASSETS" value={globalStats.bond} color="purple" onClick={() => handleSort('bond')} active={sortKey === 'bond'} sortDir={sortKey === 'bond' ? sortDirection : undefined} />
+                <MiniBar label="600D POOL" value={globalStats.s600} color="indigo" onClick={() => handleSort('staking600')} active={sortKey === 'staking600'} sortDir={sortKey === 'staking600' ? sortDirection : undefined} />
+                <MiniBar label="360D POOL" value={globalStats.s360} color="sky" onClick={() => handleSort('staking360')} active={sortKey === 'staking360'} sortDir={sortKey === 'staking360' ? sortDirection : undefined} />
                 <MiniBar label="TURBINE" value={globalStats.turb} color="emerald" />
                 <MiniBar label="SPIDER" value={globalStats.spid} color="amber" />
                 <MiniBar label="DAO CLAIM" value={globalStats.dao} color="rose" />
-                <MiniBar label="LGNS" value={globalStats.dlgns} color="pink" />
-                <MiniBar label="SLGNS" value={globalStats.dslgns} color="cyan" />
+                <MiniBar label="LGNS" value={globalStats.dlgns} color="pink" onClick={() => handleSort('governance')} active={sortKey === 'governance'} sortDir={sortKey === 'governance' ? sortDirection : undefined} />
+                <MiniBar label="SLGNS" value={globalStats.dslgns} color="cyan" onClick={() => handleSort('governance')} active={sortKey === 'governance'} sortDir={sortKey === 'governance' ? sortDirection : undefined} />
             </div>
 
             {/* Table Container */}
             <div className="bg-slate-900/80 backdrop-blur-2xl border border-white/5 rounded-[2rem] shadow-3xl overflow-hidden">
-                <div className="p-5 border-b border-white/5 flex items-center justify-between">
-                    <div className="relative w-[350px]">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                        <input 
-                            type="text" 
-                            placeholder="Quick search..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="bg-black/40 border border-white/5 text-slate-100 rounded-xl pl-11 pr-4 py-3 w-full outline-none focus:border-indigo-500/20 text-sm"
-                        />
+                <div className="p-5 border-b border-white/5 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="relative w-[300px]">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                            <input 
+                                type="text" 
+                                placeholder="Quick search..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="bg-black/40 border border-white/5 text-slate-100 rounded-xl pl-11 pr-4 py-3 w-full outline-none focus:border-indigo-500/20 text-sm"
+                            />
+                        </div>
+                        {sortKey && (
+                            <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 rounded-xl text-xs text-indigo-300 font-bold">
+                                <span>排序: <span className="uppercase text-white">{
+                                    sortKey === 'total' ? '总质押合计' :
+                                    sortKey === 'mint' ? 'Mint质押' :
+                                    sortKey === 'bond' ? 'Bond质押' :
+                                    sortKey === 'staking600' ? '600天质押' :
+                                    sortKey === 'staking360' ? '360天质押' : '治理资产'
+                                }</span> ({sortDirection === 'desc' ? '高→低' : '低→高'})</span>
+                                <button onClick={() => setSortKey(null)} className="hover:text-white text-slate-400 font-black ml-1 bg-slate-800 rounded-md px-1.5 py-0.5 text-[10px]">✕ 清除</button>
+                            </div>
+                        )}
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => document.getElementById('import-file')?.click()} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors border border-white/5">
@@ -261,24 +315,84 @@ export default function App() {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse table-fixed">
                         <thead>
-                            <tr className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] bg-white/[0.01]">
-                                <th className="px-8 py-6 w-[18%]">Wallet Identity</th>
-                                <th className="px-4 py-6 w-[18%]">Staking Breakdown</th>
-                                <th className="px-4 py-6 w-[18%] text-center">总质押合计</th>
-                                <th className="px-4 py-6 w-[15%] text-right">Yield Portfolio</th>
-                                <th className="px-4 py-6 w-[12%] text-right">DAO Claimable</th>
-                                <th 
-                                    className="px-4 py-6 w-[18%] cursor-pointer group/header select-none hover:bg-white/[0.02] transition-colors"
-                                    onClick={handleSortToggle}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        Governance Assets
-                                        <div className={`p-1 rounded bg-slate-800 transition-all ${sortDirection ? 'text-indigo-400' : 'text-slate-600'}`}>
-                                            {sortDirection === 'desc' ? <ArrowDown className="w-3 h-3" /> : sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-30" />}
+                            <tr className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] bg-white/[0.01]">
+                                <th className="px-8 py-6 w-[16%]">Wallet Identity</th>
+                                <th className="px-4 py-6 w-[22%] select-none">
+                                    <div className="flex flex-col gap-1.5">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Staking Breakdown</span>
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                            <button 
+                                                onClick={() => handleSort('mint')}
+                                                className={`text-[7px] font-black px-1.5 py-0.5 rounded border transition-all flex items-center gap-0.5 cursor-pointer ${
+                                                    sortKey === 'mint' 
+                                                        ? 'bg-blue-500/30 text-blue-300 border-blue-400 shadow-sm' 
+                                                        : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'
+                                                }`}
+                                            >
+                                                MINT
+                                                {sortKey === 'mint' && (sortDirection === 'desc' ? <ArrowDown className="w-2 h-2" /> : <ArrowUp className="w-2 h-2" />)}
+                                            </button>
+                                            <button 
+                                                onClick={() => handleSort('bond')}
+                                                className={`text-[7px] font-black px-1.5 py-0.5 rounded border transition-all flex items-center gap-0.5 cursor-pointer ${
+                                                    sortKey === 'bond' 
+                                                        ? 'bg-purple-500/30 text-purple-300 border-purple-400 shadow-sm' 
+                                                        : 'bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20'
+                                                }`}
+                                            >
+                                                BOND
+                                                {sortKey === 'bond' && (sortDirection === 'desc' ? <ArrowDown className="w-2 h-2" /> : <ArrowUp className="w-2 h-2" />)}
+                                            </button>
+                                            <button 
+                                                onClick={() => handleSort('staking600')}
+                                                className={`text-[7px] font-black px-1.5 py-0.5 rounded border transition-all flex items-center gap-0.5 cursor-pointer ${
+                                                    sortKey === 'staking600' 
+                                                        ? 'bg-indigo-500/30 text-indigo-300 border-indigo-400 shadow-sm' 
+                                                        : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/20'
+                                                }`}
+                                            >
+                                                600D
+                                                {sortKey === 'staking600' && (sortDirection === 'desc' ? <ArrowDown className="w-2 h-2" /> : <ArrowUp className="w-2 h-2" />)}
+                                            </button>
+                                            <button 
+                                                onClick={() => handleSort('staking360')}
+                                                className={`text-[7px] font-black px-1.5 py-0.5 rounded border transition-all flex items-center gap-0.5 cursor-pointer ${
+                                                    sortKey === 'staking360' 
+                                                        ? 'bg-sky-500/30 text-sky-300 border-sky-400 shadow-sm' 
+                                                        : 'bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500/20'
+                                                }`}
+                                            >
+                                                360D
+                                                {sortKey === 'staking360' && (sortDirection === 'desc' ? <ArrowDown className="w-2 h-2" /> : <ArrowUp className="w-2 h-2" />)}
+                                            </button>
                                         </div>
                                     </div>
                                 </th>
-                                <th className="px-8 py-6 w-[13%] text-center">Pulse</th>
+                                <th 
+                                    className="px-4 py-6 w-[16%] text-center cursor-pointer group/header select-none hover:bg-white/[0.02] transition-colors"
+                                    onClick={() => handleSort('total')}
+                                >
+                                    <div className="flex items-center justify-center gap-1.5">
+                                        <span>总质押合计</span>
+                                        <div className={`p-1 rounded bg-slate-800 transition-all ${sortKey === 'total' ? 'text-indigo-400' : 'text-slate-600'}`}>
+                                            {sortKey === 'total' ? (sortDirection === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-30" />}
+                                        </div>
+                                    </div>
+                                </th>
+                                <th className="px-4 py-6 w-[13%] text-right">Yield Portfolio</th>
+                                <th className="px-4 py-6 w-[11%] text-right">DAO Claimable</th>
+                                <th 
+                                    className="px-4 py-6 w-[14%] cursor-pointer group/header select-none hover:bg-white/[0.02] transition-colors"
+                                    onClick={() => handleSort('governance')}
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span>Governance Assets</span>
+                                        <div className={`p-1 rounded bg-slate-800 transition-all ${sortKey === 'governance' ? 'text-indigo-400' : 'text-slate-600'}`}>
+                                            {sortKey === 'governance' ? (sortDirection === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-30" />}
+                                        </div>
+                                    </div>
+                                </th>
+                                <th className="px-8 py-6 w-[8%] text-center">Pulse</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/[0.02]">
@@ -404,7 +518,21 @@ export default function App() {
     );
 }
 
-function MiniBar({ label, value, color }: { label: string, value: number, color: string }) {
+function MiniBar({ 
+    label, 
+    value, 
+    color, 
+    onClick, 
+    active, 
+    sortDir 
+}: { 
+    label: string, 
+    value: number, 
+    color: string, 
+    onClick?: () => void, 
+    active?: boolean, 
+    sortDir?: SortDirection 
+}) {
     const colorMap: Record<string, string> = {
         indigo: 'border-indigo-500/30 text-indigo-400 bg-indigo-500/5',
         blue: 'border-blue-500/30 text-blue-400 bg-blue-500/5',
@@ -418,8 +546,20 @@ function MiniBar({ label, value, color }: { label: string, value: number, color:
     };
 
     return (
-        <div className={`flex flex-col px-5 py-3 rounded-2xl border ${colorMap[color]} backdrop-blur-sm min-w-[140px]`}>
-            <span className="text-[8px] font-black tracking-widest uppercase opacity-60 mb-1">{label}</span>
+        <div 
+            onClick={onClick}
+            className={`flex flex-col px-5 py-3 rounded-2xl border ${colorMap[color]} backdrop-blur-sm min-w-[140px] ${
+                onClick ? 'cursor-pointer hover:opacity-80 transition-all select-none' : ''
+            } ${active ? 'ring-2 ring-indigo-500/50 bg-indigo-500/20' : ''}`}
+        >
+            <div className="flex items-center justify-between mb-1">
+                <span className="text-[8px] font-black tracking-widest uppercase opacity-60">{label}</span>
+                {active && sortDir && (
+                    <span className="text-[10px] text-indigo-400 font-black">
+                        {sortDir === 'desc' ? '↓' : '↑'}
+                    </span>
+                )}
+            </div>
             <span className="text-lg font-black tracking-tighter">{value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
         </div>
     );
