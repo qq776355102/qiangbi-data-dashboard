@@ -35,7 +35,7 @@ const INITIAL_ADDRESSES: AddressEntry[] = [
     }
 ];
 
-type SortKey = 'total' | 'mint' | 'bond' | 'staking600' | 'staking360' | 'governance' | null;
+type SortKey = 'total' | 'mint' | 'bond' | 'staking600' | 'staking360' | 'turb' | 'spid' | 'governance' | null;
 type SortDirection = 'asc' | 'desc';
 
 export default function App() {
@@ -176,6 +176,14 @@ export default function App() {
                         valA = parseFloat(dataA?.staking360Principal || '0');
                         valB = parseFloat(dataB?.staking360Principal || '0');
                         break;
+                    case 'turb':
+                        valA = parseFloat(dataA?.turbineBalance || '0');
+                        valB = parseFloat(dataB?.turbineBalance || '0');
+                        break;
+                    case 'spid':
+                        valA = parseFloat(dataA?.spiderWebReward || '0');
+                        valB = parseFloat(dataB?.spiderWebReward || '0');
+                        break;
                     case 'governance':
                         valA = parseFloat(dataA?.derivedLgns || '0') + parseFloat(dataA?.derivedSlgns || '0');
                         valB = parseFloat(dataB?.derivedLgns || '0') + parseFloat(dataB?.derivedSlgns || '0');
@@ -267,8 +275,8 @@ export default function App() {
                 <MiniBar label="BOND ASSETS" value={globalStats.bond} color="purple" onClick={() => handleSort('bond')} active={sortKey === 'bond'} sortDir={sortKey === 'bond' ? sortDirection : undefined} />
                 <MiniBar label="600D POOL" value={globalStats.s600} color="indigo" onClick={() => handleSort('staking600')} active={sortKey === 'staking600'} sortDir={sortKey === 'staking600' ? sortDirection : undefined} />
                 <MiniBar label="360D POOL" value={globalStats.s360} color="sky" onClick={() => handleSort('staking360')} active={sortKey === 'staking360'} sortDir={sortKey === 'staking360' ? sortDirection : undefined} />
-                <MiniBar label="TURBINE" value={globalStats.turb} color="emerald" />
-                <MiniBar label="SPIDER" value={globalStats.spid} color="amber" />
+                <MiniBar label="TURBINE" value={globalStats.turb} color="emerald" onClick={() => handleSort('turb')} active={sortKey === 'turb'} sortDir={sortKey === 'turb' ? sortDirection : undefined} />
+                <MiniBar label="SPIDER" value={globalStats.spid} color="amber" onClick={() => handleSort('spid')} active={sortKey === 'spid'} sortDir={sortKey === 'spid' ? sortDirection : undefined} />
                 <MiniBar label="DAO CLAIM" value={globalStats.dao} color="rose" />
                 <MiniBar label="LGNS" value={globalStats.dlgns} color="pink" onClick={() => handleSort('governance')} active={sortKey === 'governance'} sortDir={sortKey === 'governance' ? sortDirection : undefined} />
                 <MiniBar label="SLGNS" value={globalStats.dslgns} color="cyan" onClick={() => handleSort('governance')} active={sortKey === 'governance'} sortDir={sortKey === 'governance' ? sortDirection : undefined} />
@@ -295,7 +303,9 @@ export default function App() {
                                     sortKey === 'mint' ? 'Mint质押' :
                                     sortKey === 'bond' ? 'Bond质押' :
                                     sortKey === 'staking600' ? '600天质押' :
-                                    sortKey === 'staking360' ? '360天质押' : '治理资产'
+                                    sortKey === 'staking360' ? '360天质押' :
+                                    sortKey === 'turb' ? 'TURB' :
+                                    sortKey === 'spid' ? 'SPID' : '治理资产'
                                 }</span> ({sortDirection === 'desc' ? '高→低' : '低→高'})</span>
                                 <button onClick={() => setSortKey(null)} className="hover:text-white text-slate-400 font-black ml-1 bg-slate-800 rounded-md px-1.5 py-0.5 text-[10px]">✕ 清除</button>
                             </div>
@@ -379,7 +389,35 @@ export default function App() {
                                         </div>
                                     </div>
                                 </th>
-                                <th className="px-4 py-6 w-[13%] text-right">Yield Portfolio</th>
+                                <th className="px-4 py-6 w-[13%] text-right select-none">
+                                    <div className="flex flex-col items-end gap-1.5">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Yield Portfolio</span>
+                                        <div className="flex items-center justify-end gap-1 flex-wrap">
+                                            <button 
+                                                onClick={() => handleSort('turb')}
+                                                className={`text-[7px] font-black px-1.5 py-0.5 rounded border transition-all flex items-center gap-0.5 cursor-pointer ${
+                                                    sortKey === 'turb' 
+                                                        ? 'bg-emerald-500/30 text-emerald-300 border-emerald-400 shadow-sm' 
+                                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                                                }`}
+                                            >
+                                                TURB
+                                                {sortKey === 'turb' && (sortDirection === 'desc' ? <ArrowDown className="w-2 h-2" /> : <ArrowUp className="w-2 h-2" />)}
+                                            </button>
+                                            <button 
+                                                onClick={() => handleSort('spid')}
+                                                className={`text-[7px] font-black px-1.5 py-0.5 rounded border transition-all flex items-center gap-0.5 cursor-pointer ${
+                                                    sortKey === 'spid' 
+                                                        ? 'bg-amber-500/30 text-amber-300 border-amber-400 shadow-sm' 
+                                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
+                                                }`}
+                                            >
+                                                SPID
+                                                {sortKey === 'spid' && (sortDirection === 'desc' ? <ArrowDown className="w-2 h-2" /> : <ArrowUp className="w-2 h-2" />)}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </th>
                                 <th className="px-4 py-6 w-[11%] text-right">DAO Claimable</th>
                                 <th 
                                     className="px-4 py-6 w-[14%] cursor-pointer group/header select-none hover:bg-white/[0.02] transition-colors"
